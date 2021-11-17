@@ -281,6 +281,6 @@ if __name__ == '__main__':
         filename = sys.argv[1]
         if not os.path.exists(filename):
             raise Exception(f'No such file: {filename}')
-        if not sys.argv[2].isdigits():
+        if not sys.argv[2].isdigit():
             raise Exception(f'Not a line number: {sys.argv[2]}')
-        CPPComplete.search(filename, sys.argv[2], sys.argv[3])
+        CPPComplete.search(filename, int(sys.argv[2]), sys.argv[3])
