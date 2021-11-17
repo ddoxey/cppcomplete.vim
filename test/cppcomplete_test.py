@@ -134,6 +134,27 @@ class TestCPPCompleteGetObjectClassname(unittest.TestCase):
         self.assertEqual(classname, 'std::string')
 
 
+    def test_class_member_a(self):
+
+        class_hpp = CPPArtifact('hpp',
+        """
+            class a {
+              public:
+                std::string foo("bar");
+            }
+        """)
+
+        sample_cpp = CPPArtifact('cpp',
+        """
+            #include "{}"
+            a x;
+            auto bar = x.foo;
+        """.format(class_hpp.basename))
+
+        classname = CPPComplete.get_object_classname(sample_cpp.filename, 3, "bar")
+
+        self.assertEqual(classname, 'std::string')
+
 
 if __name__ == '__main__':
     unittest.main()

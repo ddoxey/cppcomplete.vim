@@ -12,8 +12,10 @@ MAN = '/usr/bin/man'
 
 class CPPComplete:
 
-    PACKAGE_RE     = '\w+(?: ::\w+ )*'
-    METHOD_CALL_RE = '\w+[.]\w+[(][^)]*[)]'
+    PACKAGE_RE       = r'\w+(?: ::\w+ )*'
+    METHOD_CALL_RE   = r'\w+[.]\w+[(][^)]*[)]'
+    FUNCTION_CALL_RE = r'\w+[(].*[)]'
+    MEMBER_VAR_RE    = r'\w+[.]\w+'
 
     @classmethod
     def get_man(cls, thing):
@@ -29,8 +31,8 @@ class CPPComplete:
             if line.startswith('No manual entry for'):
                 break
             output.append(line)
-        p.wait()    
-        p.stdout.close()    
+        p.wait()
+        p.stdout.close()
         return output
 
 
@@ -138,10 +140,30 @@ class CPPComplete:
                 if os.path.exists(definitions_path):
                     classname = cls.get_object_classname(definitions_path, 0, expression)
                 else:
-                    classname = cls.get_object_classname(include_path, 0, expression)
+                    classname = cls.get_member_classname(include_path, 0, expression)
 
                 if classname is not None:
                     return cls.normalize_with_usings(classname, filename, line_number);
+
+        return None
+
+
+    @classmethod
+    def get_member_classname(cls, filename, line_number, member):
+
+        if '::' in member or '.' in member:
+            # TODO Enforce member is within classname scope
+            classname, _, member = re.split(r'(::|[.])', member, maxsplit=2)
+
+        member_re = re.sub(r'(\W)', r'[\1]', member)
+        member_regex = re.compile(f'(\S+) \s+ {member_re}', re.X|re.M|re.S)
+
+        members = cls.search_file(filename, 0, [member_regex])
+
+        if members is not None:
+            members = list(members)
+            if len(members) > 0:
+                return members[0][0]
 
         return None
 
@@ -167,12 +189,16 @@ class CPPComplete:
             # auto thing = something;
             re.compile(f'auto \s+ {thing} \s* = \s* (\w+);', re.X|re.M|re.S),
             # auto thing = something();
-            re.compile(f'auto \s+ {thing} \s* = \s* (\w+[(].*[)]);', re.X|re.M|re.S),
+            re.compile(f'auto \s+ {thing} \s* = \s* ({cls.FUNCTION_CALL_RE});', re.X|re.M|re.S),
             # auto thing = something.get_thing();
             re.compile(f'auto \s+ {thing} \s* = \s* ({cls.METHOD_CALL_RE})', re.X|re.M|re.S),
+            # auto thing = something.thing;
+            re.compile(f'auto \s+ {thing} \s* = \s* ({cls.MEMBER_VAR_RE});', re.X|re.M|re.S),
         ]
 
         find_line_n, origin = cls.find_first_in_file(filename, line_number, regexes)
+
+        # print(f'\nthing: {thing}, origin: {origin}, [{line_number}] {filename}')
 
         if origin is None:
             return None
@@ -181,7 +207,15 @@ class CPPComplete:
             if '.' not in origin and '->' not in origin:
                 classname = cls.get_object_classname(filename, find_line_n, origin)
             else:
-                classname = cls.get_object_classname(filename, find_line_n, origin)
+                origin_thing, _, origin_member = re.split(r'(->|[.])', origin, maxsplit=2)
+
+                origin_classname = cls.get_object_classname(filename, find_line_n, origin_thing)
+
+                if origin_classname is not None:
+
+                    origin_thing = f'{origin_classname}::{origin_member}'
+
+                    classname = cls.get_expression_classname(filename, find_line_n, origin_thing)
 
             if classname is not None:
                 return cls.normalize_with_usings(classname, filename, line_number);
