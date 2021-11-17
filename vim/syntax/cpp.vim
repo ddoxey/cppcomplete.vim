@@ -10,8 +10,9 @@ function! CompleteCPP(findstart, base)
         endwhile
         return start
     else
+        let s:line_n = line('.')
         let s:filename = expand('%')
-        let s:hits = system(s:cppsearch . " '" . s:filename . "' '" . a:base . "'")
+        let s:hits = system(s:cppsearch . " '" . s:filename . "' " . s:line_n . " '" . a:base . "'")
         return split(s:hits)
     endif
 endfun
