@@ -10,6 +10,13 @@ tracemalloc.start()
 
 MAN = '/usr/bin/man'
 
+
+def debug(msg):
+    if 'DEBUG' in os.environ:
+        os.system("")
+        print(f'\033[31;1m{msg}\033[0m', file=sys.stderr)
+
+
 class CPPComplete:
 
     PACKAGE_RE       = r'\w+(?: ::\w+ )*'
@@ -54,20 +61,15 @@ class CPPComplete:
     @classmethod
     def find_first_in_file(cls, filename, line_number, regexes):
 
-        lines = []
-
         with open(filename, 'r') as fh:
+            line_n = 1
             for line in fh:
-                lines.append(line.rstrip())
-                if line_number > 0 and len(lines) == line_number:
+                for regex in regexes:
+                    m = regex.search(line)
+                    if m is not None:
+                        return line_n, m.group(1)
+                if line_n == line_number:
                     break
-
-        for line_i, line in enumerate(lines):
-            line_n = line_i + 1
-            for regex in regexes:
-                m = regex.search(line)
-                if m is not None:
-                    return line_n, m.group(1)
 
         return None, None
 
@@ -89,8 +91,9 @@ class CPPComplete:
 
         usings_regexes = [
             re.compile(r'using \s+ ( \w+ ) \s* ;', re.X|re.M|re.S),
-            re.compile(r'using \s+ ( \w+ ) \s* = \s* ({PACKAGE_RE}) \s* ;', re.X|re.M|re.S),
+            re.compile(f'using \s+ ( \w+ ) \s* = \s* ({cls.PACKAGE_RE}) \s* ;', re.X|re.M|re.S),
         ]
+
         usings = cls.search_file(filename, line_number, usings_regexes)
 
         for using in [u for u in usings]:
@@ -173,16 +176,21 @@ class CPPComplete:
 
         thing_re = re.sub(r'(\W)', r'[\1]', thing)
 
+        debug(f'thing_re: {thing_re}')
+
         regexes = [
             # thing = some::thing(
-            re.compile(f'\W {thing} \s* = \s* ({cls.PACKAGE_RE})[(].+[)];', re.X|re.M|re.S),
+            re.compile(f'\W {thing_re} \s* = \s* ({cls.PACKAGE_RE})[(].+[)];', re.X|re.M|re.S),
             # some::thing thing;
             re.compile(f'({cls.PACKAGE_RE}) \s+ {thing_re} \s* [;{{]', re.X|re.M|re.S),
+            # some::other<other::thing> thing;
+            re.compile(f'({cls.PACKAGE_RE}(?:<[^>]+>)?) \s+ {thing_re} \s* [;{{]', re.X|re.M|re.S),
         ]
 
         _, classname = cls.find_first_in_file(filename, line_number, regexes)
 
         if classname is not None:
+            debug(f'{thing} looks like a {classname}')
             return cls.normalize_with_usings(classname, filename, line_number);
 
         regexes = [
@@ -198,7 +206,7 @@ class CPPComplete:
 
         find_line_n, origin = cls.find_first_in_file(filename, line_number, regexes)
 
-        # print(f'\nthing: {thing}, origin: {origin}, [{line_number}] {filename}')
+        debug(f'thing: {thing}, origin: {origin}, [{line_number}] {filename}')
 
         if origin is None:
             return None
@@ -237,7 +245,7 @@ class CPPComplete:
 
         for line in cls.get_man(classname):
 
-            if line.lower().startswith('non-member '):
+            if line.lower().startswith('example'):
                 break
 
             if ignoring == True and line.lower().startswith('member functions'):
@@ -262,18 +270,34 @@ class CPPComplete:
 
 
     @classmethod
-    def search(cls, filename, line_number, thing):
+    def print_members(cls, classname, thing=None):
 
-        classname = cls.get_object_classname(filename, line_number, thing.strip())
+        if '<' in classname:
+            classname, _ = classname.split('<', 1)
 
-        if classname is None:
-            return
+        if thing is None:
+            thing = f'{classname}::'
+        else:
+            thing = f'{thing}.'
 
         members = cls.get_class_members(classname)
 
         if members is not None:
             for member in members:
-                print(f'{thing}.{member}')
+                print(f'{thing}{member}')
+
+
+    @classmethod
+    def search(cls, filename, line_number, thing):
+
+        classname = cls.get_object_classname(filename, line_number, thing.strip())
+
+        debug(f'{thing} is a {classname}')
+
+        if classname is None:
+            return
+
+        cls.print_members(classname, thing)
 
 
 if __name__ == '__main__':
@@ -284,3 +308,5 @@ if __name__ == '__main__':
         if not sys.argv[2].isdigit():
             raise Exception(f'Not a line number: {sys.argv[2]}')
         CPPComplete.search(filename, int(sys.argv[2]), sys.argv[3])
+    elif len(sys.argv) == 2:
+        CPPComplete.print_members(sys.argv[1])
