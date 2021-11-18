@@ -14,6 +14,5 @@ C++ VIM Completion Function
 		└── cppcomplete.py
 ```
 
-Deploy this baby in your home directory as suggested above. When editing a C++ file
-in VIM place your cursor at the end of an object name and then invoke cppcomplete.py
-with Ctr-X + Ctrl-U. 
+Use the ```install.sh``` script to deploy this baby in your home directory as suggested above. When editing a C++ file
+in VIM place your cursor at the end of an object name and then invoke cppcomplete.py with Ctr-X + Ctrl-U. 
