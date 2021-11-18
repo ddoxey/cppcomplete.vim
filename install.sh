@@ -28,6 +28,14 @@ function install()
     cp -f $FTDETECT    "$HOME/.$FTDETECT"   || return 1
     cp -f $SYNTAX      "$HOME/.$SYNTAX"     || return 1
     cp -f $CPPCOMPLETE "$HOME/$CPPCOMPLETE" || return 1
+
+    chmod +x "$HOME/$CPPCOMPLETE" || return 1
+
+    echo "Installed:"
+    for f in "$HOME/.$FTDETECT" "$HOME/.$SYNTAX" "$HOME/$CPPCOMPLETE"
+    do
+        test -e "$f" && echo "  $f"
+    done
 }
 
 install "$@"
