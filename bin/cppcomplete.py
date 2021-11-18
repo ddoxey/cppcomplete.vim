@@ -19,10 +19,11 @@ def debug(msg):
 
 class CPPComplete:
 
-    PACKAGE_RE       = r'\w+(?: ::\w+ )*'
-    METHOD_CALL_RE   = r'\w+[.]\w+[(][^)]*[)]'
-    FUNCTION_CALL_RE = r'\w+[(].*[)]'
-    MEMBER_VAR_RE    = r'\w+[.]\w+'
+    PACKAGE_RE         = r'\w+(?: ::\w+ )*'
+    MEMBER_VAR_RE      = r'\w+[.]\w+'
+    METHOD_CALL_RE     = r'\w+[.]\w+[(][^)]*[)]'
+    FUNCTION_CALL_RE   = r'\w+[(].*[)]'
+    CONSTUCTOR_CALL_RE = r'\w+(?: ::\w+ )*[(][^)]*[)]'
 
     @classmethod
     def get_man(cls, thing):
@@ -62,8 +63,9 @@ class CPPComplete:
     def find_first_in_file(cls, filename, line_number, regexes):
 
         with open(filename, 'r') as fh:
-            line_n = 1
+            line_n = 0
             for line in fh:
+                line_n += 1
                 for regex in regexes:
                     m = regex.search(line)
                     if m is not None:
@@ -185,11 +187,22 @@ class CPPComplete:
             re.compile(f'({cls.PACKAGE_RE}) \s+ {thing_re} \s* [;{{]', re.X|re.M|re.S),
             # some::other<other::thing> thing;
             re.compile(f'({cls.PACKAGE_RE}(?:<[^>]+>)?) \s+ {thing_re} \s* [;{{]', re.X|re.M|re.S),
+            # some::thing *thing;
+            re.compile(f'({cls.PACKAGE_RE} \s* [*] \s*) {thing_re} \s* [;{{]', re.X|re.M|re.S),
+            # auto thing = new some::thing("whatever");
+            re.compile(f'auto \s+ {thing} \s* = \s* ( new \s+ {cls.CONSTUCTOR_CALL_RE}) \s* ;', re.X|re.M|re.S),
         ]
 
         _, classname = cls.find_first_in_file(filename, line_number, regexes)
 
         if classname is not None:
+
+            if '*' in classname:
+                classname = re.sub(r'\s*[*]\s*', '*', classname)
+            elif classname.startswith('new '):
+                classname, _ = re.sub(r'new\s+', "", classname).split('(', 1)
+                classname += '*'
+
             debug(f'{thing} looks like a {classname}')
             return cls.normalize_with_usings(classname, filename, line_number);
 
@@ -197,11 +210,11 @@ class CPPComplete:
             # auto thing = something;
             re.compile(f'auto \s+ {thing} \s* = \s* (\w+);', re.X|re.M|re.S),
             # auto thing = something();
-            re.compile(f'auto \s+ {thing} \s* = \s* ({cls.FUNCTION_CALL_RE});', re.X|re.M|re.S),
+            re.compile(f'auto \s+ {thing} \s* = \s* ({cls.FUNCTION_CALL_RE}) \s* ;', re.X|re.M|re.S),
             # auto thing = something.get_thing();
             re.compile(f'auto \s+ {thing} \s* = \s* ({cls.METHOD_CALL_RE})', re.X|re.M|re.S),
             # auto thing = something.thing;
-            re.compile(f'auto \s+ {thing} \s* = \s* ({cls.MEMBER_VAR_RE});', re.X|re.M|re.S),
+            re.compile(f'auto \s+ {thing} \s* = \s* ({cls.MEMBER_VAR_RE}) \s* ;', re.X|re.M|re.S),
         ]
 
         find_line_n, origin = cls.find_first_in_file(filename, line_number, regexes)
@@ -212,6 +225,9 @@ class CPPComplete:
             return None
 
         if origin is not None:
+
+            debug(f'{thing} came from a {origin}')
+
             if '.' not in origin and '->' not in origin:
                 classname = cls.get_object_classname(filename, find_line_n, origin)
             else:
@@ -272,19 +288,29 @@ class CPPComplete:
     @classmethod
     def print_members(cls, classname, thing=None):
 
+        separator = '.'
+
         if '<' in classname:
-            classname, _ = classname.split('<', 1)
+            outer, inner = classname.split('<', 1)
+            if outer.endswith('_ptr'):
+                classname = inner.rstrip('>')
+                separator = '->'
+            else:
+                classname = outer
+        elif classname.endswith('*'):
+                classname = classname.rstrip('*')
+                separator = '->'
+
 
         if thing is None:
             thing = f'{classname}::'
-        else:
-            thing = f'{thing}.'
+            separator = '::'
 
         members = cls.get_class_members(classname)
 
         if members is not None:
             for member in members:
-                print(f'{thing}{member}')
+                print(f'{thing}{separator}{member}')
 
 
     @classmethod

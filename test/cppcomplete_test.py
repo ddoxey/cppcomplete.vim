@@ -156,5 +156,26 @@ class TestCPPCompleteGetObjectClassname(unittest.TestCase):
         self.assertEqual(classname, 'std::string')
 
 
+    def test_basic_pointer_a(self):
+
+        sample_cpp = CPPArtifact('cpp', "std::string *foobar;")
+
+        classname = CPPComplete.get_object_classname(sample_cpp.filename, 1, "foobar")
+
+        self.assertEqual(classname, 'std::string*')
+
+
+    def test_basic_pointer_b(self):
+
+        sample_cpp = CPPArtifact('cpp',
+        """
+            auto foobar = new std::string("x");
+        """)
+
+        classname = CPPComplete.get_object_classname(sample_cpp.filename, 1, "foobar")
+
+        self.assertEqual(classname, 'std::string*')
+
+
 if __name__ == '__main__':
     unittest.main()
